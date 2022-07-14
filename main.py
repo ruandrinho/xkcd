@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__file__)
 
 
-def download_image(url, filename, params={}):
+def download_image(url, filename, params=None):
     Path('images').mkdir(parents=True, exist_ok=True)
     response = requests.get(url, params=params)
     response.raise_for_status()
@@ -18,14 +18,14 @@ def download_image(url, filename, params={}):
 
 def get_random_xkcd():
     url = 'https://xkcd.com/info.0.json'
-    response = requests.get(url)
-    response.raise_for_status()
-    random_xkcd_id = randint(1, response.json()['num'])
+    xkcd_fresh_issue_response = requests.get(url)
+    xkcd_fresh_issue_response.raise_for_status()
+    random_xkcd_id = randint(1, xkcd_fresh_issue_response.json()['num'])
     logger.info(f'Getting XKCD # {random_xkcd_id}')
     url = f'https://xkcd.com/{random_xkcd_id}/info.0.json'
-    response = requests.get(url)
-    response.raise_for_status()
-    random_xkcd_issue = response.json()
+    xkcd_random_issue_response = requests.get(url)
+    xkcd_random_issue_response.raise_for_status()
+    random_xkcd_issue = xkcd_random_issue_response.json()
     filename = f'{random_xkcd_id}.png'
     download_image(random_xkcd_issue['img'], filename)
     return filename, random_xkcd_issue['alt']
@@ -39,14 +39,14 @@ def vk_group_upload_image(group_id, access_token, api_version, filename):
         'v': api_version
     }
     logger.info('Uploading photo to VK server')
-    response = requests.get(url, params=params)
-    response.raise_for_status()
+    vk_getting_url_response = requests.get(url, params=params)
+    vk_getting_url_response.raise_for_status()
+    upload_url = vk_getting_url_response.json()['response']['upload_url']
     with open(filename, 'rb') as file:
-        upload_url = response.json()['response']['upload_url']
         files = {'photo': file}
-        response = requests.post(upload_url, files=files)
-        response.raise_for_status()
-        return response.json()
+        vk_uploading_response = requests.post(upload_url, files=files)
+    vk_uploading_response.raise_for_status()
+    return vk_uploading_response.json()
 
 
 def vk_group_save_image(group_id, access_token, api_version,
@@ -68,9 +68,8 @@ def vk_group_save_image(group_id, access_token, api_version,
 
 def vk_group_post_with_image(group_id, access_token, api_version, message,
                              saved_photo_parameters):
-    attachments_string =\
-        f'photo{saved_photo_parameters["response"][0]["owner_id"]}_' +\
-        f'{saved_photo_parameters["response"][0]["id"]}'
+    attachment_owner_id = saved_photo_parameters['response'][0]['owner_id']
+    attachment_media_id = saved_photo_parameters['response'][0]['id']
     params = {
         'group_id': group_id,
         'access_token': access_token,
@@ -78,7 +77,7 @@ def vk_group_post_with_image(group_id, access_token, api_version, message,
         'owner_id': f'-{group_id}',
         'from_group': 1,
         'message': message,
-        'attachments': attachments_string
+        'attachments': f'photo{attachment_owner_id}_{attachment_media_id}'
     }
     logger.info('Posting photo on the wall')
     url = 'https://api.vk.com/method/wall.post'
